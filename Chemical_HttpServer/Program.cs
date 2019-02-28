@@ -141,7 +141,13 @@ namespace Chemical_HttpServer
                     {
                         //string[] tmpcol = { "userName" };
                         MySqlConnection conn = null;
-                        var reader = MySqlQuery("chemical", "users", cols, "userName", userName, out conn);
+                        string restr = null;
+                        var reader = MySqlQuery("chemical", "users", cols, "userName", userName, out conn, out restr);
+                        if(reader == null)
+                        {
+                            returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
+                            goto LoginOut;
+                        }
                         reader.Read();
                         if (reader[1].ToString().CompareTo(password) == 0)
                         {
@@ -154,6 +160,7 @@ namespace Chemical_HttpServer
                         conn.Close();
                         conn = null;
                     }
+                    LoginOut:;
                 }
                 else if (postMethod == "adminLogin")
                 {
@@ -290,7 +297,13 @@ namespace Chemical_HttpServer
                 {
                     var tableName = _params["tableName"];
                     MySqlConnection conn = null;
-                    var reader = MySqlQuery("chemical", tableName, new string[] { "*" }, null, null, out conn);
+                    string restr = null;
+                    var reader = MySqlQuery("chemical", tableName, new string[] { "*" }, null, null, out conn,out restr);
+                    if(reader == null)
+                    {
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
+                        goto AdminGetTableOut;
+                    }
                     string json = "{\"type\":\"normal\",\"result\":\"" + "OK" + "\",\"code\":\"200\"," + "\"objs\":[";
                     bool isnull = true;
                     while (reader.Read())
@@ -309,7 +322,7 @@ namespace Chemical_HttpServer
                     }
                     if (isnull)
                     {
-                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "NullTable", "200" });
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "Warning: NullTable!", "200" });
 
                     }
                     else
@@ -319,6 +332,7 @@ namespace Chemical_HttpServer
                         returnObj = json;
                     }
                     conn.Close();
+                    AdminGetTableOut:;
                 }
 
             }
@@ -345,7 +359,7 @@ namespace Chemical_HttpServer
                 Console.WriteLine($"网络蹦了：{ex.ToString()}");
             }
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"请求处理完成：{guid},时间：{ DateTime.Now.ToString()}\r\n");
+            Console.WriteLine($"请求处理完成：{guid},时间：{ DateTime.Now.ToString()},返回信息:{returnObj}\r\n");
             #endregion
         }
         #region sql
@@ -379,31 +393,46 @@ namespace Chemical_HttpServer
             }
         }
 
-        static MySqlDataReader MySqlQuery(string dataBase, string tableName, string[] colNames, string where, string whereValue, out MySqlConnection conn)
+        static MySqlDataReader MySqlQuery(string dataBase, string tableName, string[] colNames, string where, string whereValue, out MySqlConnection conn,out string reStr)
         {
-            string command = "select ";
-            for (int i = 0; i < colNames.Length; i++)
-            {
-                command = command + colNames[i];
-                if (i != colNames.Length - 1)
-                {
-                    command = command + ",";
-                }
-                else
-                {
-                    command = command + " ";
-                }
-            }
-            command = command + " from " + dataBase + "." + tableName;
-            if (where != null)
-                command = command + " where " + where + "=\"" + whereValue + "\"";
-            conn = new MySqlConnection(connetStr);
-            conn.Open();
-            MySqlCommand CMD = new MySqlCommand(command, conn);
             MySqlDataReader reader = null;
-            reader = CMD.ExecuteReader();
-            return reader;
-
+            conn = null;
+            try
+            {
+                string command = "select ";
+                for (int i = 0; i < colNames.Length; i++)
+                {
+                    command = command + colNames[i];
+                    if (i != colNames.Length - 1)
+                    {
+                        command = command + ",";
+                    }
+                    else
+                    {
+                        command = command + " ";
+                    }
+                }
+                command = command + " from " + dataBase + "." + tableName;
+                if (where != null)
+                    command = command + " where " + where + "=\"" + whereValue + "\"";
+                conn = new MySqlConnection(connetStr);
+                conn.Open();
+                MySqlCommand CMD = new MySqlCommand(command, conn);
+                
+                reader = CMD.ExecuteReader();
+                reStr = "OK";
+                return reader;
+            }
+            catch (Exception ex)
+            {
+                if(conn != null)
+                {
+                    conn.Close();  
+                }
+                reStr = ex.Message;
+                reader = null;
+                return reader;
+            }
         }
 
         static bool MySqlIsExist(string dataBase, string tableName, string colNames, string specificValue)
