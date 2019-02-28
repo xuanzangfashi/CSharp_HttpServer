@@ -94,7 +94,7 @@ namespace Chemical_HttpServer
                 GetParams(request.Url.Query, out _params);
                 if (_params == null)
                 {
-                    returnObj = "{\"type\":\"error\",\"result\":\"can not find any params\",\"code\":\"200\"}";
+                    returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "can not find any params", "200" });
                     return;
                 }
                 var postMethod = _params["method"];
@@ -107,13 +107,15 @@ namespace Chemical_HttpServer
                     bool isExist = MySqlIsExist("chemical", "users", "userName", userName);
                     if (isExist)
                     {
-                        returnObj = "{\"type\":\"error\",\"result\":\"the same userName exist\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "the same userName exist", "200" });
+
 
                     }
                     else
                     {
                         int re = MySqlInsert("chemical", "users", cols, values);
-                        returnObj = "{\"type\":\"normal\",\"result\":\"OK\",\"code\":\"" + re.ToString() + "\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
+
                     }
 
 
@@ -132,7 +134,8 @@ namespace Chemical_HttpServer
                     bool isExist = MySqlIsExist("chemical", "users", "userName", userName);
                     if (!isExist)
                     {
-                        returnObj = "{\"type\":\"error\",\"result\":\"userName does not exist\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "userName does not exist", "200" });
+
                     }
                     else
                     {
@@ -142,11 +145,11 @@ namespace Chemical_HttpServer
                         reader.Read();
                         if (reader[1].ToString().CompareTo(password) == 0)
                         {
-                            returnObj = "{\"type\":\"normal\",\"result\":\"OK\"}";
+                            returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
                         }
                         else
                         {
-                            returnObj = "{\"type\":\"error\",\"result\":\"wrong password\",\"code\":\"200\"}";
+                            returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "wrong password", "200" });
                         }
                         conn.Close();
                         conn = null;
@@ -170,7 +173,7 @@ namespace Chemical_HttpServer
                     string re = ReadInputStreamToString(request.InputStream, int.Parse(request.Headers.GetValues("Content-Length")[0]));
                     if (string.IsNullOrEmpty(re))
                     {
-                        returnObj = "{\"type\":\"error\",\"result\":\"post data is null!\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "post data is null!", "200" });
                     }
                     else
                     {
@@ -189,9 +192,10 @@ namespace Chemical_HttpServer
                             }
                             bool mysqlRe = MySqlEdit("chemical", _params["tableName"], _params["id"], keys.ToArray(), values.ToArray());
                             if (mysqlRe)
-                                returnObj = "{\"type\":\"normal\",\"result\":\"OK\",\"code\":\"200\"}";
+                                returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
+
                             else
-                                returnObj = "{\"type\":\"warning\",\"result\":edit table faild\"\",\"code\":\"200\"}";
+                                returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "edit table faild", "200" });
                         }
                         //   
                     }
@@ -202,7 +206,7 @@ namespace Chemical_HttpServer
                     string re = ReadInputStreamToString(request.InputStream, int.Parse(request.Headers.GetValues("Content-Length")[0]));
                     if (string.IsNullOrEmpty(re))
                     {
-                        returnObj = "{\"type\":\"error\",\"result\":\"" + "json null" + "\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "json null", "200" });
 
                     }
                     else
@@ -222,7 +226,7 @@ namespace Chemical_HttpServer
                             }
                             MySqlDelete("chemical", _params["tableName"], ids.ToArray());
                         }
-                        returnObj = "{\"type\":\"normal\",\"result\":\"" + "OK" + "\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
                     }
                 }
                 else if (postMethod == "adminMutilpleInsert")
@@ -238,7 +242,7 @@ namespace Chemical_HttpServer
                     FileInfo fi = new FileInfo(realFileName);
                     if (fi.Exists)
                     {
-                        returnObj = "{\"type\":\"warning\",\"result\":\"" + "file exist.Do you want to replace this file" + "\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "file exist.Do you want to replace this file", "200" });
                     }
                     else
                     {
@@ -273,11 +277,13 @@ namespace Chemical_HttpServer
                     if (s)
                     {
                         //   response.OutputStream.Write(data, 0, data.Length);
-                        returnObj = "{\"type\":\"normal\",\"result\":\"" + "OK" + "\",\"code\":\"200\",\"url\":\"" + HttpContentRootUrl + "/boundles/" + fileName + "\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code","url" }, new string[] { "normal", "OK", "200" , HttpContentRootUrl + "/boundles/" + fileName });
+                       
                     }
                     else
                     {
-                        returnObj = "{\"type\":\"error\",\"result\":\"" + restr + "\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
+                        
                     }
                 }
                 else if (getMethod == "adminGetTable")
@@ -303,7 +309,8 @@ namespace Chemical_HttpServer
                     }
                     if (isnull)
                     {
-                        returnObj = "{\"type\":\"warning\",\"result\":\"" + "NullTable" + "\",\"code\":\"200\"}";
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "NullTable", "200" });
+
                     }
                     else
                     {
@@ -526,7 +533,7 @@ namespace Chemical_HttpServer
                 {
                     data = null;
                     inputStream.Close();
-                    return "{\"type\":\"error\",\"result\":\"" + "file size 0 byte" + "\",\"code\":\"200\"}";
+                    return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "file size 0 byte", "200" });
                 }
                 data = byteList.ToArray();
                 inputStream.Close();
@@ -536,15 +543,16 @@ namespace Chemical_HttpServer
                 inputStream.Close();
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"在接收数据时发生错误:{ex.ToString()}");
-                return "{\"type\":\"error\",\"result\":\"" + ex.ToString() + "\",\"code\":\"404\"}";//把服务端错误信息直接返回可能会导致信息不安全，此处仅供参考
+                return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", ex.ToString(), "404" });//把服务端错误信息直接返回可能会导致信息不安全，此处仅供参考
             }
             if (!ByteToFile(data, fileName))
             {
-                return "{\"type\":\"error\",\"result\":\"" + "save file faild" + "\",\"code\":\"200\"}";
+                return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "save file faild", "200" });
+
             }
             else
             {
-                return "{\"type\":\"normal\",\"result\":\"" + "OK" + "\",\"code\":\"200\"}";
+                return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
             }
         }
         private static string ReadLocalFile(string fileName, out byte[] bytes, out bool s)
@@ -606,6 +614,20 @@ namespace Chemical_HttpServer
                 result = false;
             }
             return result;
+        }
+
+        static string MakeSampleReturnJson(string[] keys, string[] values)
+        {
+            if (keys.Length != values.Length)
+                return "";
+            JObject jobj = new JObject();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                jobj[keys[i]] = values[i];
+            }
+            var jsonStr = jobj.ToString();
+            jsonStr = jsonStr.Replace(" ", "");
+            return jsonStr;
         }
 
         private static string HandleRequest(HttpListenerRequest request, HttpListenerResponse response)
