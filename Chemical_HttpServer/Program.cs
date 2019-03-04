@@ -13,13 +13,16 @@ namespace Chemical_HttpServer
 {
     class Program
     {
-
+        static Dictionary<string, int> ContinueOffset;
+        static Dictionary<string, string> ContinuingIp;
         static string connetStr = "server=192.168.50.53;port=3306;user=root;password=wuxiaohan; database=chemical;";
         static HttpListener httpobj;
         static string HttpContentDir = "D:/HttpContent/apache/Apache24/htdocs/boundles/";
         static string HttpContentRootUrl = "192.168.50.53:5757";
         static void Main(string[] args)
         {
+            ContinueOffset = new Dictionary<string, int>();
+            ContinuingIp = new Dictionary<string, string>();
             MySqlInit();
             //提供一个简单的、可通过编程方式控制的 HTTP 协议侦听器。此类不能被继承。
             httpobj = new HttpListener();
@@ -143,7 +146,7 @@ namespace Chemical_HttpServer
                         MySqlConnection conn = null;
                         string restr = null;
                         var reader = MySqlQuery("chemical", "users", cols, "userName", userName, out conn, out restr);
-                        if(reader == null)
+                        if (reader == null)
                         {
                             returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
                             goto LoginOut;
@@ -242,18 +245,52 @@ namespace Chemical_HttpServer
                 }
                 else if (postMethod == "upload")
                 {
-                    var userName = _params["userName"];
                     var fileName = _params["fileName"];
-                    //var fileSize = _params["fileSize"];
+                    if (!_params.ContainsKey("dataContinue"))
+                    {
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "Http params incomplete!", "200" });
+                    }
                     var realFileName = HttpContentDir + fileName;
                     FileInfo fi = new FileInfo(realFileName);
                     if (fi.Exists)
                     {
-                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "file exist.Do you want to replace this file", "200" });
+                        if (_params["dataContinue"] == "false")
+                        {
+                            if (ContinueOffset.ContainsKey(realFileName))//exist and continuing
+                            {
+                                returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "file are continuing", "200" });
+
+                            }
+                            else//exist and replace
+                            {
+                                returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "file exist.Do you want to replace this file", "200" });
+                            }
+                        }
+                        else
+                        {
+                            string ip = request.RemoteEndPoint.Address.ToString();
+                            if (ContinuingIp.ContainsKey(realFileName))
+                            {
+                                if(ContinuingIp[realFileName] == ip)//continue file upload (seek)
+                                {
+                                    returnObj = ReadInputStream(request.InputStream, realFileName, _params["dataContinue"]);
+                                }
+                                else//continue file but ip does not matching
+                                {
+                                    returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "other user are continuing upload file", "200" });
+                                }
+                            }
+                            else//continue file first time upload(seek 0)
+                            {
+                                ContinuingIp.Add(realFileName, ip);
+                                returnObj = ReadInputStream(request.InputStream, realFileName, _params["dataContinue"]);
+                            }
+                        }
                     }
                     else
                     {
-                        returnObj = ReadInputStream(request.InputStream, realFileName);
+                        //normal upload
+                        returnObj = ReadInputStream(request.InputStream, realFileName, _params["dataContinue"]);
                     }
                 }
                 else if (postMethod == "forceUpload")
@@ -262,7 +299,14 @@ namespace Chemical_HttpServer
                     var fileName = _params["fileName"];
                     //var fileSize = _params["fileSize"];
                     var realFileName = HttpContentDir + fileName;
-                    returnObj = ReadInputStream(request.InputStream, realFileName);
+                    if (_params.ContainsKey("dataContinue"))
+                    {
+                        returnObj = ReadInputStream(request.InputStream, realFileName, _params["dataContinue"]);
+                    }
+                    else
+                    {
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "warning", "Http params incomplete!", "200" });
+                    }
                 }
 
                 // returnObj = $"POST";//HandleRequest(request, response);
@@ -275,7 +319,7 @@ namespace Chemical_HttpServer
                 var getMethod = _params["method"];
                 if (getMethod == "download")
                 {
-                    var userName = _params["userName"];
+                    //var userName = _params["userName"];
                     var fileName = _params["fileName"];
                     var realFileName = HttpContentDir + fileName;
                     byte[] data = null;
@@ -284,13 +328,13 @@ namespace Chemical_HttpServer
                     if (s)
                     {
                         //   response.OutputStream.Write(data, 0, data.Length);
-                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code","url" }, new string[] { "normal", "OK", "200" , HttpContentRootUrl + "/boundles/" + fileName });
-                       
+                        returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code", "url" }, new string[] { "normal", "OK", "200", HttpContentRootUrl + "/boundles/" + fileName });
+
                     }
                     else
                     {
                         returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
-                        
+
                     }
                 }
                 else if (getMethod == "adminGetTable")
@@ -298,8 +342,8 @@ namespace Chemical_HttpServer
                     var tableName = _params["tableName"];
                     MySqlConnection conn = null;
                     string restr = null;
-                    var reader = MySqlQuery("chemical", tableName, new string[] { "*" }, null, null, out conn,out restr);
-                    if(reader == null)
+                    var reader = MySqlQuery("chemical", tableName, new string[] { "*" }, null, null, out conn, out restr);
+                    if (reader == null)
                     {
                         returnObj = MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", restr, "200" });
                         goto AdminGetTableOut;
@@ -393,7 +437,7 @@ namespace Chemical_HttpServer
             }
         }
 
-        static MySqlDataReader MySqlQuery(string dataBase, string tableName, string[] colNames, string where, string whereValue, out MySqlConnection conn,out string reStr)
+        static MySqlDataReader MySqlQuery(string dataBase, string tableName, string[] colNames, string where, string whereValue, out MySqlConnection conn, out string reStr)
         {
             MySqlDataReader reader = null;
             conn = null;
@@ -418,16 +462,16 @@ namespace Chemical_HttpServer
                 conn = new MySqlConnection(connetStr);
                 conn.Open();
                 MySqlCommand CMD = new MySqlCommand(command, conn);
-                
+
                 reader = CMD.ExecuteReader();
                 reStr = "OK";
                 return reader;
             }
             catch (Exception ex)
             {
-                if(conn != null)
+                if (conn != null)
                 {
-                    conn.Close();  
+                    conn.Close();
                 }
                 reStr = ex.Message;
                 reader = null;
@@ -542,8 +586,56 @@ namespace Chemical_HttpServer
                 return json;
             }
         }
+        // Dictionary<string, Stream> ContinueStream;
+        // private static string ReadInputStream(Stream inputStream, string fileName, string continueFlag)
+        // {
+        //     byte[] data = null;
+        //
+        //     try
+        //     {
+        //         var byteList = new List<byte>();
+        //         var byteArr = new byte[2048];
+        //         int readLen = 0;
+        //         int len = 0;
+        //         if (continueFlag == "true")
+        //         {
+        //             var TmpStream = new BinaryReader(inputStream);
+        //             do
+        //             {
+        //                 readLen = TmpStream.Read(byteArr, 0, byteArr.Length);
+        //                 len += readLen;
+        //                 byteList.AddRange(byteArr);
+        //             } while (readLen != 0);
+        //             if (len == 0)
+        //             {
+        //                 data = null;
+        //                 inputStream.Close();
+        //                 return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "file size 0 byte", "200" });
+        //             }
+        //             data = byteList.ToArray();
+        //             inputStream.Close();
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         inputStream.Close();
+        //         Console.ForegroundColor = ConsoleColor.Red;
+        //         Console.WriteLine($"在接收数据时发生错误:{ex.ToString()}");
+        //         return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", ex.ToString(), "404" });//把服务端错误信息直接返回可能会导致信息不安全，此处仅供参考
+        //     }
+        //     if (!ByteToFile(data, fileName))
+        //     {
+        //         return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "save file faild", "200" });
+        //
+        //     }
+        //     else
+        //     {
+        //         return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
+        //     }
+        //
+        // }
 
-        private static string ReadInputStream(Stream inputStream, string fileName)
+        private static string ReadInputStream(Stream inputStream, string fileName, string continueFlag)
         {
             byte[] data = null;
             try
@@ -555,8 +647,16 @@ namespace Chemical_HttpServer
                 do
                 {
                     readLen = inputStream.Read(byteArr, 0, byteArr.Length);
-                    len += readLen;
-                    byteList.AddRange(byteArr);
+                    if (readLen != 0)
+                    {
+                        len += readLen;
+                        byteList.AddRange(byteArr);
+                        if (readLen < 2048)
+                        {
+                            byteList.RemoveRange(readLen, 2048 - readLen);
+                        }
+                        
+                    }
                 } while (readLen != 0);
                 if (len == 0)
                 {
@@ -574,14 +674,14 @@ namespace Chemical_HttpServer
                 Console.WriteLine($"在接收数据时发生错误:{ex.ToString()}");
                 return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", ex.ToString(), "404" });//把服务端错误信息直接返回可能会导致信息不安全，此处仅供参考
             }
-            if (!ByteToFile(data, fileName))
+            if (!ByteToFile(data, fileName, continueFlag))
             {
                 return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "error", "save file faild", "200" });
 
             }
             else
             {
-                return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", "OK", "200" });
+                return MakeSampleReturnJson(new string[] { "type", "result", "code" }, new string[] { "normal", continueFlag, "200" });
             }
         }
         private static string ReadLocalFile(string fileName, out byte[] bytes, out bool s)
@@ -627,18 +727,52 @@ namespace Chemical_HttpServer
             return "OK";
         }
 
-        static bool ByteToFile(byte[] byteArray, string fileName)
+
+        static bool ByteToFile(byte[] byteArray, string fileName, string continueFlag,bool isBinary = true)
         {
             bool result = false;
             try
             {
-                using (FileStream fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.Write))
+                using (BinaryWriter fs = new BinaryWriter(new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.Write)))
                 {
-                    fs.Write(byteArray, 0, byteArray.Length);
-                    result = true;
+                    if (continueFlag == "false")
+                    {
+                        fs.Write(byteArray, 0, byteArray.Length);
+                        result = true;
+                    }
+                    else if (continueFlag == "true")
+                    {
+                        if (ContinueOffset.ContainsKey(fileName))
+                        {
+                            int offset = ContinueOffset[fileName];
+                            fs.Seek(0, SeekOrigin.End);
+                            fs.Write(byteArray, 0, byteArray.Length);
+                            ContinueOffset[fileName] = offset + byteArray.Length;
+                            result = true;
+                        }
+                        else
+                        {
+                            fs.Write(byteArray, 0, byteArray.Length);
+                            ContinueOffset.Add(fileName, byteArray.Length);
+                            result = true;
+                        }
+
+                    }
+                    else//end
+                    {
+                        int offset = ContinueOffset[fileName];
+                        fs.Seek(0, SeekOrigin.End);
+                        fs.Write(byteArray, 0, byteArray.Length);
+                        ContinueOffset.Remove(fileName);
+                        ContinuingIp.Remove(fileName);
+                        result = true;
+                    }
+
+                    fs.Flush();
+                    fs.Close();
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 result = false;
             }
